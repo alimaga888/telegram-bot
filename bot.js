@@ -1,6 +1,42 @@
 require("dotenv").config();
 const TelegramBot = require("node-telegram-bot-api");
 const { createClient } = require("@supabase/supabase-js");
+const express = require("express");
+
+// ============= ОТЛАДКА ПЕРЕМЕННЫХ =============
+
+console.log("🔍 Проверка переменных окружения:");
+console.log("BOT_TOKEN:", process.env.BOT_TOKEN ? "✅ Есть" : "❌ НЕТ");
+console.log("PAYMENT_TOKEN:", process.env.PAYMENT_TOKEN ? "✅ Есть" : "❌ НЕТ");
+console.log("SUPABASE_URL:", process.env.SUPABASE_URL ? "✅ Есть" : "❌ НЕТ");
+console.log(
+  "SUPABASE_ANON_KEY:",
+  process.env.SUPABASE_ANON_KEY ? "✅ Есть" : "❌ НЕТ",
+);
+
+if (!process.env.SUPABASE_URL) {
+  console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: SUPABASE_URL не найден!");
+  console.error(
+    "Все переменные:",
+    Object.keys(process.env).filter((k) => k.includes("SUPABASE")),
+  );
+  process.exit(1);
+}
+
+// ============= МИНИ-СЕРВЕР =============
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+  res.send("Бот ALYAZHE работает 24/7!");
+});
+
+app.listen(port, () => {
+  console.log(`🌐 Веб-сервер запущен на порту ${port}`);
+});
+
+// ============= КОНФИГУРАЦИЯ БОТА =============
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const PAYMENT_TOKEN = process.env.PAYMENT_TOKEN;
