@@ -16,10 +16,6 @@ console.log(
 
 if (!process.env.SUPABASE_URL) {
   console.error("❌ КРИТИЧЕСКАЯ ОШИБКА: SUPABASE_URL не найден!");
-  console.error(
-    "Все переменные:",
-    Object.keys(process.env).filter((k) => k.includes("SUPABASE")),
-  );
   process.exit(1);
 }
 
@@ -48,44 +44,53 @@ const supabase = createClient(
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
+// ============= /start =============
+
 bot.onText(/\/start/, async (msg) => {
   const chatId = msg.chat.id;
 
-  const { data: examples } = await supabase
-    .from("projects")
-    .select("title")
-    .limit(3);
+  try {
+    const { data: examples } = await supabase
+      .from("projects")
+      .select("title")
+      .limit(3);
 
-  let exampleText = "";
-  if (examples && examples.length > 0) {
-    exampleText = "\n\n Примеры проектов:\n";
-    examples.forEach((proj) => {
-      exampleText += `• ${proj.title}\n`;
-    });
+    let exampleText = "";
+    if (examples && examples.length > 0) {
+      exampleText = "\n\n📌 Примеры проектов:\n";
+      examples.forEach((proj) => {
+        exampleText += `• ${proj.title}\n`;
+      });
+    }
+
+    bot.sendMessage(
+      chatId,
+      `👋 Здравствуйте!\n\n` +
+        `Я бот для покупки проектов домов ALYAZHE.\n\n` +
+        `📝 Как купить проект:\n` +
+        `1. Напишите название проекта (или его часть)\n` +
+        `2. Я найду проект и создам счёт на оплату\n` +
+        `3. После оплаты вы получите PDF чертежи\n\n` +
+        `📋 Полный каталог: https://alyazhe.ru/#projects` +
+        exampleText +
+        `\n💬 Напишите название проекта для начала.`,
+    );
+  } catch (error) {
+    console.error("❌ Ошибка в /start:", error);
+    bot.sendMessage(chatId, "❌ Произошла ошибка. Попробуйте позже.");
   }
-
-  bot.sendMessage(
-    chatId,
-    `👋 Здравствуйте!\n\n` +
-      `Я бот для покупки проектов домов ALYAZHE.\n\n` +
-      `📝 Как купить проект:\n` +
-      `1. Напишите название проекта (или его часть)\n` +
-      `2. Я найду проект и создам счёт на оплату\n` +
-      `3. После оплаты вы получите PDF чертежи\n\n` +
-      `📋 Полный каталог: https://alyazhe.ru/#projects` +
-      exampleText +
-      `\n💬 Напишите название проекта для начала.`,
-  );
 });
+
+// ============= ОБРАБОТКА СООБЩЕНИЙ =============
 
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
   const username = msg.from.username || msg.from.first_name;
 
-  if (text.startsWith("/")) return;
+  if (!text || text.startsWith("/")) return;
 
-  console.log(` Получено сообщение от @${username}: "${text}"`);
+  console.log(`📩 Получено сообщение от @${username}: "${text}"`);
 
   try {
     const { data: projects, error } = await supabase
@@ -93,8 +98,9 @@ bot.on("message", async (msg) => {
       .select("*")
       .ilike("title", `%${text}%`)
       .limit(5);
+
     if (error) {
-      console.error("❌ Ошибка Supabase: ", error);
+      console.error("❌ Ошибка Supabase:", error);
       bot.sendMessage(chatId, "❌ Ошибка загрузки проектов. Попробуйте позже.");
       return;
     }
@@ -137,55 +143,86 @@ bot.on("message", async (msg) => {
 
     console.log(`✅ Найден проект: ${project.title}, цена: ${project.Price} ₽`);
 
+    // ✅ ПРОВЕРКА ТОКЕНА ПЕРЕД ОТПРАВКОЙ
+    if (!PAYMENT_TOKEN) {
+      console.error("❌ PAYMENT_TOKEN не найден!");
+      bot.sendMessage(
+        chatId,
+        "❌ Ошибка конфигурации платежей. Обратитесь к администратору.",
+      );
+      return;
+    }
+
+    console.log("💳 Создаю счёт на оплату...");
+    console.log("PAYMENT_TOKEN:", PAYMENT_TOKEN.substring(0, 20) + "...");
+
     const invoicePayload = JSON.stringify({
       projectId: project.id,
       chatId: chatId,
       username: username,
     });
 
-    bot.sendInvoice(
-      chatId,
-      `Проект: ${project.title}`,
-      project.description || `Чертежи проекта ${project.title}`,
-      invoicePayload,
-      PAYMENT_TOKEN,
-      "RUB",
-      [
+    try {
+      await bot.sendInvoice(
+        chatId,
+        `Проект: ${project.title}`,
+        project.description || `Чертежи проекта ${project.title}`,
+        invoicePayload,
+        PAYMENT_TOKEN,
+        "RUB",
+        [
+          {
+            label: project.title,
+            amount: Math.round(project.Price * 100),
+          },
+        ],
         {
-          label: project.title,
-          amount: Math.round(project.Price * 100),
+          photo_url: project.cover_image,
+          photo_width: 800,
+          photo_height: 600,
+          need_name: false,
+          need_phone_number: false,
+          need_email: false,
+          need_shipping_address: false,
+          is_flexible: false,
         },
-      ],
-      {
-        photo_url: project.cover_image,
-        photo_width: 800,
-        photo_height: 600,
-        need_name: false,
-        need_phone_number: false,
-        need_email: false,
-        need_shipping_address: false,
-        is_flexible: false,
-      },
-    );
+      );
 
-    bot.sendMessage(
-      chatId,
-      `💳 Счёт на оплату сформирован!\n\n` +
-        `📦 Проект: ${project.title}\n` +
-        `📐 Площадь: ${project.area} м²\n` +
-        `💰 Стоимость: ${project.Price.toLocaleString("ru-RU")} ₽\n\n` +
-        `Нажмите кнопку "Оплатить" выше 👆`,
-    );
+      console.log("✅ Счёт успешно отправлен!");
+
+      bot.sendMessage(
+        chatId,
+        `💳 Счёт на оплату сформирован!\n\n` +
+          `📦 Проект: ${project.title}\n` +
+          `📐 Площадь: ${project.area} м²\n` +
+          `💰 Стоимость: ${project.Price.toLocaleString("ru-RU")} ₽\n\n` +
+          `Нажмите кнопку "Оплатить" выше 👆`,
+      );
+    } catch (invoiceError) {
+      console.error("❌ ОШИБКА СОЗДАНИЯ СЧЁТА:", invoiceError);
+      console.error("Детали:", JSON.stringify(invoiceError, null, 2));
+
+      bot.sendMessage(
+        chatId,
+        `❌ Ошибка создания счёта.\n\n` +
+          `Причина: ${invoiceError.message}\n\n` +
+          `Обратитесь к администратору.`,
+      );
+    }
   } catch (error) {
     console.error("❌ Ошибка:", error);
     bot.sendMessage(chatId, "❌ Произошла ошибка. Попробуйте позже.");
   }
 });
 
+// ============= ПОДТВЕРЖДЕНИЕ ОПЛАТЫ =============
+
 bot.on("pre_checkout_query", (query) => {
   console.log("✅ Pre-checkout query получен");
   bot.answerPreCheckoutQuery(query.id, true);
 });
+
+// ============= УСПЕШНАЯ ОПЛАТА =============
 
 bot.on("successful_payment", async (msg) => {
   const chatId = msg.chat.id;
@@ -247,6 +284,8 @@ bot.on("successful_payment", async (msg) => {
     );
   }
 });
+
+// ============= ОШИБКИ =============
 
 bot.on("polling_error", (error) => {
   console.error("❌ Polling error:", error);
