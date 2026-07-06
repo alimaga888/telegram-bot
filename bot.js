@@ -116,7 +116,7 @@ bot.on("message", async (msg) => {
       projects.forEach((proj, index) => {
         message += `${index + 1}. ${proj.title}\n`;
         message += `   📐 Площадь: ${proj.area} м²\n`;
-        message += `   💰 Цена: ${proj.price?.toLocaleString("ru-RU") || "не указана"} ₽\n\n`;
+        message += `   💰 Цена: ${proj.Price?.toLocaleString("ru-RU") || "не указана"} ₽\n\n`;
       });
 
       message += `Напишите полное название проекта для покупки.`;
