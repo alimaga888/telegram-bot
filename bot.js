@@ -127,7 +127,7 @@ bot.on("message", async (msg) => {
 
     const project = projects[0];
 
-    if (!project.price) {
+    if (!project.Price) {
       bot.sendMessage(
         chatId,
         "❌ Для этого проекта не установлена цена. Обратитесь к администратору.",
@@ -135,7 +135,7 @@ bot.on("message", async (msg) => {
       return;
     }
 
-    console.log(`✅ Найден проект: ${project.title}, цена: ${project.price} ₽`);
+    console.log(`✅ Найден проект: ${project.title}, цена: ${project.Price} ₽`);
 
     const invoicePayload = JSON.stringify({
       projectId: project.id,
@@ -153,7 +153,7 @@ bot.on("message", async (msg) => {
       [
         {
           label: project.title,
-          amount: Math.round(project.price * 100),
+          amount: Math.round(project.Price * 100),
         },
       ],
       {
@@ -173,7 +173,7 @@ bot.on("message", async (msg) => {
       `💳 Счёт на оплату сформирован!\n\n` +
         `📦 Проект: ${project.title}\n` +
         `📐 Площадь: ${project.area} м²\n` +
-        `💰 Стоимость: ${project.price.toLocaleString("ru-RU")} ₽\n\n` +
+        `💰 Стоимость: ${project.Price.toLocaleString("ru-RU")} ₽\n\n` +
         `Нажмите кнопку "Оплатить" выше 👆`,
     );
   } catch (error) {
@@ -218,7 +218,7 @@ bot.on("successful_payment", async (msg) => {
         project_id: projectId,
         telegram_chat_id: chatId,
         telegram_username: username,
-        amount: project.price,
+        amount: project.Price,
         payment_id: payment.telegram_payment_charge_id,
       },
     ]);
