@@ -44,6 +44,55 @@ const supabase = createClient(
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
+async function sendInvoiceForProject(chatId, project, user) {
+  const username = user.username || user.first_name;
+
+  if (!project.Price) {
+    return bot.sendMessage(
+      chatId,
+      "❌ Для этого проекта не установлена цена. Обратитесь к администратору.",
+    );
+  }
+
+  console.log(`💳 Создаю счёт для проекта "${project.title}"`);
+
+  const invoicePayload = JSON.stringify({
+    projectId: project.id,
+    chatId: chatId,
+    username: username,
+  });
+
+  try {
+    await bot.sendInvoice(
+      chatId,
+      `Проект: ${project.title}`,
+      project.description || `Чертежи проекта ${project.title}`,
+      invoicePayload,
+      PAYMENT_TOKEN,
+      "RUB",
+      [{ label: project.title, amount: Math.round(project.Price * 100) }],
+      {
+        photo_url: project.cover_image,
+        photo_width: 800,
+        photo_height: 600,
+        need_name: false,
+        need_phone_number: false,
+        need_email: false,
+        need_shipping_address: false,
+        is_flexible: false,
+      },
+    );
+
+    console.log(`✅ Счёт успешно отправлен!`);
+  } catch (invoiceError) {
+    console.error("❌ ОШИБКА СОЗДАНИЯ СЧЁТА:", invoiceError);
+    bot.sendMessage(
+      chatId,
+      `❌ Ошибка создания счёта.\n\nПричина: ${invoiceError.message}`,
+    );
+  }
+}
+
 // ============= /start =============
 
 bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
