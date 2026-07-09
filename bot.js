@@ -46,10 +46,68 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 // ============= /start =============
 
-bot.onText(/\/start/, async (msg) => {
+bot.onText(/\/start(?:\s+(.*))?/, async (msg, match) => {
   const chatId = msg.chat.id;
+  const payload = match[1]; // Это будет ID проекта из URL (если есть)
 
   try {
+    // ============= РЕЖИМ 1: Переход с сайта (есть ID проекта) =============
+    if (payload) {
+      console.log(
+        `🚀 Пользователь пришел по ссылке с сайта. ID проекта: ${payload}`,
+      );
+
+      const { data: project, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("id", payload)
+        .single();
+
+      if (error || !project) {
+        console.error("❌ Проект по ID не найден:", error);
+
+        // Если проект не найден, показываем обычное меню
+        bot.sendMessage(
+          chatId,
+          `⚠️ К сожалению, проект не найден.\n\n` +
+            `Попробуйте:\n` +
+            `• Написать название проекта вручную\n` +
+            `• Посмотреть каталог: https://alyazhe.ru/#projects`,
+        );
+        return;
+      }
+
+      console.log(`✅ Найден проект по ссылке: ${project.title}`);
+
+      // Показываем приветствие с информацией о проекте
+      bot.sendMessage(
+        chatId,
+        `👋 Здравствуйте!\n\n` +
+          `Вы перешли для покупки проекта:\n\n` +
+          `📦 *${project.title}*\n` +
+          `📐 Площадь: ${project.area} м²\n` +
+          `💰 Стоимость: ${project.Price?.toLocaleString("ru-RU") || "не указана"} ₽\n\n` +
+          `Сейчас отправлю счёт на оплату...`,
+        { parse_mode: "Markdown" },
+      );
+
+      // Отправляем счёт
+      await sendInvoiceForProject(chatId, project, msg.from);
+
+      bot.sendMessage(
+        chatId,
+        `💳 Счёт сформирован!\n\n` +
+          `Нажмите кнопку "Оплатить" выше 👆\n\n` +
+          `После оплаты вы мгновенно получите чертежи.`,
+      );
+
+      return; // ✅ Выходим, чтобы не показывать обычное меню
+    }
+
+    // ============= РЕЖИМ 2: Обычный запуск (без параметров) =============
+
+    console.log(`👤 Обычный запуск /start от пользователя ${chatId}`);
+
     const { data: examples } = await supabase
       .from("projects")
       .select("title")
@@ -73,7 +131,7 @@ bot.onText(/\/start/, async (msg) => {
         `3. После оплаты вы получите PDF чертежи\n\n` +
         `📋 Полный каталог: https://alyazhe.ru/#projects` +
         exampleText +
-        `\n💬 Напишите название проекта для начала.`,
+        `\n\n💬 Напишите название проекта для начала.`,
     );
   } catch (error) {
     console.error("❌ Ошибка в /start:", error);
